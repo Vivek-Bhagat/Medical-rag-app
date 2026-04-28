@@ -1,0 +1,24 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+
+# ─── Retrieval (runs locally, lightweight) ────────────────────────────────
+sentence-transformers==3.2.1
+faiss-cpu==1.8.0
+rank-bm25==0.2.2
+
+# ─── NLP / Bio ────────────────────────────────────────────────────────────
+biopython==1.84
+numpy==1.26.4
+
+# ─── HTTP (API calls to HF / Groq) ───────────────────────────────────────
+requests==2.32.3
+httpx==0.27.2
+
+# ─── Utils ────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+
+# ─── NOTE ─────────────────────────────────────────────────────────────────
+# transformers / accelerate / bitsandbytes are NOT needed.
+# OpenBioLLM-70B runs on HuggingFace servers via API.
+# Your machine only needs ~200 MB RAM for this service.
