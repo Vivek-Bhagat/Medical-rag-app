@@ -7,7 +7,7 @@
 | Component | Minimum | Notes |
 |-----------|---------|-------|
 | RAM | 4 GB | Embeddings + BM25 + FAISS run locally |
-| VRAM | 0 | OpenBioLLM-70B runs on HF/Groq servers |
+| VRAM | 0 | llama-3.3-70b runs on Groq servers |
 | Disk | 2 GB | Model cache for embeddings (~500 MB) |
 | Internet | Broadband | API calls to HF / Groq |
 
