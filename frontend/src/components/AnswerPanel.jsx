@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-export default function AnswerPanel({ answer, confidence, verified, queryTime, cached }) {
+export default function AnswerPanel({ answer, confidence, verified, queryTime, cached, variant = "panel" }) {
   const isNoAnswer = answer === "No answer found";
 
   const formattedAnswer = useMemo(() => {
@@ -13,7 +13,7 @@ export default function AnswerPanel({ answer, confidence, verified, queryTime, c
   const confidenceClass = confidence >= 0.75 ? "high" : confidence >= 0.45 ? "moderate" : "low";
 
   return (
-    <div className={`answer-panel ${isNoAnswer ? "no-answer" : "has-answer"}`}>
+    <div className={`answer-panel ${variant === "chat" ? "answer-panel--chat" : ""} ${isNoAnswer ? "no-answer" : "has-answer"}`}>
       <div className="answer-header">
         <h2 className="answer-title">
           {isNoAnswer ? "⚠ No Answer Found" : "Evidence-Based Answer"}

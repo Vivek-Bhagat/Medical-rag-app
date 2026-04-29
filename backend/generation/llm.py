@@ -1,24 +1,13 @@
-"""
-Remote LLM interface — zero local GPU required.
+"""Remote LLM interface — zero local GPU required.
 
-Primary:  HuggingFace Inference API  (free tier, serverless)
-          Model: aaditya/Llama3-OpenBioLLM-70B
-          Endpoint: https://api-inference.huggingface.co/models/...
+Groq-only mode.
 
-Fallback: Groq API  (free tier, extremely fast)
-          Model: llama3-70b-8192  (Llama-3 70B, same base as OpenBioLLM)
-
-Both are 100% free with a free account. No local GPU or RAM needed.
-The entire model runs on HuggingFace / Groq servers.
+This project previously supported Hugging Face as a backend/fallback.
+Per current configuration, HF is disabled and *only* Groq is used.
 
 Setup:
-  1. HuggingFace token → https://huggingface.co/settings/tokens
-  2. (Optional) Groq key  → https://console.groq.com/keys
-  3. Add both to backend/.env
-
-Hardware requirement on your machine: virtually none.
-  - RAM:  ~200 MB  (just Python + requests)
-  - VRAM: 0
+    1. Groq key → https://console.groq.com/keys
+    2. Add to backend/.env as GROQ_API_KEY
 """
 
 import os
@@ -69,30 +58,31 @@ ANSWER:"""
 
 class LocalLLM:
     """
-    Remote LLM client — runs aaditya/Llama3-OpenBioLLM-70B on HF servers.
-    Falls back to Groq (llama3-70b) automatically on failure.
-    Your machine needs 0 GPU and ~200 MB RAM.
+    Remote LLM client — Groq-only.
     """
 
     def __init__(self):
         self._refresh_from_env()
 
     def _refresh_from_env(self) -> None:
-        self.hf_token = os.getenv("HF_TOKEN", "").strip()
-        self.hf_model = os.getenv("HF_MODEL", "aaditya/Llama3-OpenBioLLM-70B").strip()
-        self.hf_api_url = f"https://api-inference.huggingface.co/models/{self.hf_model}"
+        # HF is intentionally disabled (Groq-only mode).
+        self.hf_token = ""
+        self.hf_model = ""
+        self.hf_api_base = ""
+        self.hf_textgen_url = ""
+        self.hf_chat_url = ""
 
         self.groq_api_key = os.getenv("GROQ_API_KEY", "").strip()
-        self.groq_model = os.getenv("GROQ_MODEL", "llama3-70b-8192").strip()
+        self.groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
 
-        backend = os.getenv("LLM_BACKEND", "huggingface").strip().lower()
-        self.backend = backend if backend in ("huggingface", "groq") else "huggingface"
+        # Force Groq-only regardless of env var.
+        self.backend = "groq"
 
         self.hf_timeout = int(os.getenv("HF_TIMEOUT", "120"))
         self.groq_timeout = int(os.getenv("GROQ_TIMEOUT", "60"))
         self.max_retries = int(os.getenv("LLM_MAX_RETRIES", "3"))
 
-        self.hf_ok = bool(self.hf_token)
+        self.hf_ok = False
         self.groq_ok = bool(self.groq_api_key)
 
     # ── Startup ───────────────────────────────────────────────────────────────
@@ -104,23 +94,18 @@ class LocalLLM:
         # Ensure we pick up environment variables loaded after module import
         self._refresh_from_env()
 
-        if not self.hf_ok and not self.groq_ok:
+        if not self.groq_ok:
             raise RuntimeError(
                 "\n\nNo API keys configured!\n"
-                "  HF_TOKEN    → https://huggingface.co/settings/tokens  (free)\n"
                 "  GROQ_API_KEY → https://console.groq.com/keys            (free)\n"
-                "Add at least one to backend/.env and restart."
+                "Add it to backend/.env and restart."
             )
-
-        if self.hf_ok:
-            ok, msg = self._ping_hf()
-            logger.info(f"HuggingFace API [{self.hf_model}]: {'OK' if ok else 'WARN — ' + msg}")
 
         if self.groq_ok:
             ok, msg = self._ping_groq()
             logger.info(f"Groq API [{self.groq_model}]: {'OK' if ok else 'WARN — ' + msg}")
 
-        logger.info(f"Active primary backend: {self.backend.upper()}")
+        logger.info("Active primary backend: GROQ")
 
     # ── Main entry ────────────────────────────────────────────────────────────
 
@@ -133,16 +118,7 @@ class LocalLLM:
             context=context, query=query
         )
 
-        if self.backend == "huggingface":
-            answer, conf = self._try_hf(user_content)
-            if answer == "No answer found" and self.groq_ok:
-                logger.info("HF gave no answer — retrying with Groq fallback")
-                answer, conf = self._try_groq(user_content)
-        else:
-            answer, conf = self._try_groq(user_content)
-            if answer == "No answer found" and self.hf_ok:
-                logger.info("Groq gave no answer — retrying with HF fallback")
-                answer, conf = self._try_hf(user_content)
+        answer, conf = self._try_groq(user_content)
 
         return answer, conf
 
@@ -151,8 +127,7 @@ class LocalLLM:
     def _ping_hf(self) -> Tuple[bool, str]:
         try:
             r = requests.get(
-                f"https://api-inference.huggingface.co/models/{self.hf_model}",
-                headers={"Authorization": f"Bearer {self.hf_token}"},
+                f"https://huggingface.co/models/{self.hf_model}",
                 timeout=10,
             )
             return r.status_code in (200, 503), f"HTTP {r.status_code}"
@@ -174,7 +149,7 @@ class LocalLLM:
 
     def _hf_chat(self, user_content: str) -> Tuple[str, float]:
         """HF /v1/chat/completions — OpenAI-compatible endpoint."""
-        url = f"https://api-inference.huggingface.co/models/{self.hf_model}/v1/chat/completions"
+        url = self.hf_chat_url
         payload = {
             "model": self.hf_model,
             "messages": [
@@ -199,8 +174,9 @@ class LocalLLM:
                     continue
 
                 if r.status_code == 429:
-                    logger.warning(f"HF rate-limited — waiting 60s (attempt {attempt})")
-                    time.sleep(60)
+                    retry_after = int(r.headers.get("retry-after", "60"))
+                    logger.warning(f"HF rate-limited — waiting {retry_after}s (attempt {attempt})")
+                    time.sleep(retry_after)
                     continue
 
                 r.raise_for_status()
@@ -238,7 +214,7 @@ class LocalLLM:
 
         for attempt in range(1, self.max_retries + 1):
             try:
-                r = requests.post(self.hf_api_url, headers=self._hf_headers(), json=payload, timeout=self.hf_timeout)
+                r = requests.post(self.hf_textgen_url, headers=self._hf_headers(), json=payload, timeout=self.hf_timeout)
 
                 if r.status_code == 503:
                     wait = r.json().get("estimated_time", 20)
@@ -247,7 +223,8 @@ class LocalLLM:
                     continue
 
                 if r.status_code == 429:
-                    time.sleep(60)
+                    retry_after = int(r.headers.get("retry-after", "60"))
+                    time.sleep(retry_after)
                     continue
 
                 r.raise_for_status()

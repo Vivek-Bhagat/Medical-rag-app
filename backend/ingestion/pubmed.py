@@ -14,7 +14,7 @@ from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-Entrez.email = os.getenv("ENTREZ_EMAIL", "medrag@example.com")
+Entrez.email = os.getenv("ENTREZ_EMAIL", "vivekkachhap1890@gmail.com")
 Entrez.tool = "MedRAG"
 
 

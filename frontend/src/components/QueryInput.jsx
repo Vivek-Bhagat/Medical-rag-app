@@ -8,7 +8,7 @@ const EXAMPLE_QUERIES = [
   "What are the indications for thrombolysis in acute ischemic stroke?",
 ];
 
-export default function QueryInput({ onSubmit, loading }) {
+export default function QueryInput({ onSubmit, loading, variant = "panel", showExamples = true }) {
   const [query, setQuery] = useState("");
   const [showOptions, setShowOptions] = useState(false);
   const [maxResults, setMaxResults] = useState(5);
@@ -18,6 +18,7 @@ export default function QueryInput({ onSubmit, loading }) {
     e.preventDefault();
     if (!query.trim() || loading) return;
     onSubmit(query.trim(), { maxResults, minScore });
+    setQuery("");
   };
 
   const setExample = (q) => {
@@ -25,7 +26,7 @@ export default function QueryInput({ onSubmit, loading }) {
   };
 
   return (
-    <div className="query-panel">
+    <div className={`query-panel ${variant === "chat" ? "query-panel--chat" : ""}`}>
       <form onSubmit={handleSubmit} className="query-form">
         <div className="query-input-wrapper">
           <textarea
@@ -33,7 +34,7 @@ export default function QueryInput({ onSubmit, loading }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Ask a clinical question… e.g. What is the recommended dose of amoxicillin for strep throat?"
-            rows={3}
+            rows={variant === "chat" ? 2 : 3}
             disabled={loading}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -60,7 +61,7 @@ export default function QueryInput({ onSubmit, loading }) {
                   <span className="spinner" /> Analyzing...
                 </span>
               ) : (
-                "Search Evidence →"
+                variant === "chat" ? "Send" : "Search →"
               )}
             </button>
           </div>
@@ -95,21 +96,24 @@ export default function QueryInput({ onSubmit, loading }) {
         )}
       </form>
 
-      <div className="example-queries">
-        <span className="example-label">Examples:</span>
-        <div className="example-list">
-          {EXAMPLE_QUERIES.map((q, i) => (
-            <button
-              key={i}
-              className="example-chip"
-              onClick={() => setExample(q)}
-              disabled={loading}
-            >
-              {q.length > 60 ? q.slice(0, 60) + "…" : q}
-            </button>
-          ))}
+      {showExamples && (
+        <div className="example-queries">
+          <span className="example-label">Examples:</span>
+          <div className="example-list">
+            {EXAMPLE_QUERIES.map((q, i) => (
+              <button
+                key={i}
+                className="example-chip"
+                onClick={() => setExample(q)}
+                disabled={loading}
+                type="button"
+              >
+                {q.length > 60 ? q.slice(0, 60) + "…" : q}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

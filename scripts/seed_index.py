@@ -7,12 +7,15 @@ Usage:
     python scripts/seed_index.py
     python scripts/seed_index.py --queries "hypertension treatment" "diabetes mellitus type 2"
     python scripts/seed_index.py --max 100
+    python scripts/seed_index.py --preset journals --max 40
+    python scripts/seed_index.py --preset all --max 25
 """
 
 import sys
 import os
 import argparse
 import logging
+from typing import Optional
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../backend"))
 
@@ -25,7 +28,7 @@ from utils.logger import setup_logger
 
 logger = setup_logger("seed")
 
-DEFAULT_QUERIES = [
+TOPIC_QUERIES = [
     "hypertension treatment guidelines",
     "type 2 diabetes mellitus management",
     "antibiotic resistance clinical treatment",
@@ -49,6 +52,43 @@ DEFAULT_QUERIES = [
 ]
 
 
+# Source-/journal-targeted queries to diversify the seed corpus.
+# Notes:
+# - "PMC" here means PubMed records with free full text in PubMed Central (`pmc[filter]`).
+# - UpToDate is not indexed as a PubMed journal; Medscape's historical "Medscape J Med" is.
+JOURNAL_QUERIES = [
+    # NEJM
+    '"N Engl J Med"[TA] AND (clinical trial[pt] OR randomized controlled trial[pt] OR review[pt])',
+    # BMC journals (examples; PubMed uses abbreviated titles in [TA])
+    '"BMC Med"[TA] AND (review[pt] OR clinical trial[pt] OR meta-analysis[pt])',
+    '"BMC Infect Dis"[TA] AND (systematic review[pt] OR clinical trial[pt] OR review[pt])',
+    '"BMC Cancer"[TA] AND (clinical trial[pt] OR randomized controlled trial[pt] OR review[pt])',
+    # Cochrane Library (Cochrane reviews are indexed in PubMed)
+    '"Cochrane Database Syst Rev"[TA]',
+    # Medscape (historical PubMed-indexed journal)
+    '"Medscape J Med"[TA]',
+    # PMC / Free full text
+    'pmc[filter] AND (guideline[pt] OR systematic review[pt] OR review[pt])',
+    'free full text[filter] AND (practice guideline[pt] OR review[pt])',
+]
+
+
+def _build_queries(preset: str, custom_queries: Optional[list[str]]) -> list[str]:
+    if custom_queries:
+        return custom_queries
+
+    preset = (preset or "topics").lower()
+    if preset == "topics":
+        return list(TOPIC_QUERIES)
+    if preset == "journals":
+        return list(JOURNAL_QUERIES)
+    if preset == "all":
+        # Keep order stable for reproducibility.
+        return list(TOPIC_QUERIES) + list(JOURNAL_QUERIES)
+
+    raise ValueError(f"Unknown preset: {preset}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Seed MedRAG PubMed index")
     parser.add_argument(
@@ -56,12 +96,18 @@ def main():
         help="Custom search queries (default: medical topic list)"
     )
     parser.add_argument(
+        "--preset",
+        choices=["topics", "journals", "all"],
+        default="all",
+        help="Query preset to use when --queries is not provided (default: all)",
+    )
+    parser.add_argument(
         "--max", type=int, default=50,
         help="Max articles per query (default: 50)"
     )
     args = parser.parse_args()
 
-    queries = args.queries or DEFAULT_QUERIES
+    queries = _build_queries(args.preset, args.queries)
     max_per_query = args.max
 
     logger.info(f"Seeding index with {len(queries)} queries, max {max_per_query} per query")

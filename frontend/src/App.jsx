@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import QueryInput from "./components/QueryInput";
 import AnswerPanel from "./components/AnswerPanel";
 import SourceList from "./components/SourceList";
@@ -8,17 +8,38 @@ import IngestPanel from "./components/IngestPanel";
 import { useSystemStatus } from "./hooks/useSystemStatus";
 import "./styles/global.css";
 
+function newId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 export default function App() {
-  const [result, setResult] = useState(null);
+  const [messages, setMessages] = useState([]); // chat history
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("query"); // "query" | "ingest"
   const { status } = useSystemStatus();
+  const chatEndRef = useRef(null);
+
+  const hasHistory = messages.length > 0;
+
+  useEffect(() => {
+    if (!chatEndRef.current) return;
+    chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, loading]);
 
   const handleQuery = useCallback(async (query, options) => {
     setLoading(true);
     setError(null);
-    setResult(null);
+
+    const userId = newId();
+    const assistantId = newId();
+
+    setMessages((prev) => [
+      ...prev,
+      { id: userId, role: "user", query },
+      { id: assistantId, role: "assistant", pending: true },
+    ]);
 
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/query`, {
@@ -37,13 +58,101 @@ export default function App() {
       }
 
       const data = await res.json();
-      setResult(data);
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+                ...m,
+                pending: false,
+                answer: data.answer,
+                sources: data.sources,
+                confidence: data.confidence,
+                verified: data.verified,
+                cached: data.cached,
+                queryTime: data.query_time_ms,
+              }
+            : m
+        )
+      );
     } catch (e) {
       setError(e.message);
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? { ...m, pending: false, error: true, message: e.message }
+            : m
+        )
+      );
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const chatItems = useMemo(() => {
+    return messages.map((m) => {
+      if (m.role === "user") {
+        return (
+          <ChatRow key={m.id} align="right">
+            <div className="chat-bubble chat-bubble-user">
+              <div className="chat-bubble-label">You</div>
+              <div className="chat-bubble-text">{m.query}</div>
+            </div>
+          </ChatRow>
+        );
+      }
+
+      if (m.role === "assistant") {
+        if (m.pending) {
+          return (
+            <ChatRow key={m.id} align="left">
+              <div className="chat-bubble chat-bubble-assistant">
+                <div className="chat-bubble-label">MedRAG</div>
+                <div className="chat-thinking">
+                  <span className="spinner" /> Thinking…
+                </div>
+              </div>
+            </ChatRow>
+          );
+        }
+
+        if (m.error) {
+          return (
+            <ChatRow key={m.id} align="left">
+              <div className="chat-bubble chat-bubble-error">
+                <div className="chat-bubble-label">Error</div>
+                <div className="chat-bubble-text">{m.message}</div>
+              </div>
+            </ChatRow>
+          );
+        }
+
+        return (
+          <ChatRow key={m.id} align="left">
+            <div className="chat-bubble chat-bubble-assistant">
+              <div className="chat-bubble-label">MedRAG</div>
+              <div className="chat-bubble-content">
+                <AnswerPanel
+                  variant="chat"
+                  answer={m.answer}
+                  confidence={m.confidence}
+                  verified={m.verified}
+                  queryTime={m.queryTime}
+                  cached={m.cached}
+                />
+                {m.sources && m.sources.length > 0 && (
+                  <SourceList variant="chat" sources={m.sources} />
+                )}
+              </div>
+            </div>
+          </ChatRow>
+        );
+      }
+
+      return null;
+    });
+  }, [messages]);
 
   return (
     <div className="app">
@@ -67,42 +176,25 @@ export default function App() {
 
       <main className="main-content">
         {activeTab === "query" && (
-          <div className="query-layout">
-            <QueryInput onSubmit={handleQuery} loading={loading} />
-
-            {error && (
-              <div className="error-banner">
-                <span className="error-icon">⚠</span>
-                <span>{error}</span>
-              </div>
-            )}
-
-            {loading && (
-              <div className="loading-container">
-                <div className="loading-steps">
-                  <LoadingStep delay={0} label="Searching PubMed index" />
-                  <LoadingStep delay={800} label="Hybrid BM25 + Vector retrieval" />
-                  <LoadingStep delay={1600} label="Re-ranking with CrossEncoder" />
-                  <LoadingStep delay={2400} label="Generating evidence-based answer" />
-                  <LoadingStep delay={3200} label="Verifying citations & claims" />
+          <div className="chat-layout">
+            <div className={`chat-history ${hasHistory ? "has-history" : "empty"}`}>
+              {!hasHistory && (
+                <div className="chat-empty">
+                  <div className="chat-empty-title">Chat</div>
+                  <div className="chat-empty-subtitle">
+                    Ask a clinical question to start. Your history stays in this session.
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {result && !loading && (
-              <div className="results-layout">
-                <AnswerPanel
-                  answer={result.answer}
-                  confidence={result.confidence}
-                  verified={result.verified}
-                  queryTime={result.query_time_ms}
-                  cached={result.cached}
-                />
-                {result.sources && result.sources.length > 0 && (
-                  <SourceList sources={result.sources} />
-                )}
-              </div>
-            )}
+              {chatItems}
+
+              <div ref={chatEndRef} />
+            </div>
+
+            <div className="chat-input">
+              <QueryInput onSubmit={handleQuery} loading={loading} variant="chat" showExamples={!hasHistory} />
+            </div>
           </div>
         )}
 
@@ -117,18 +209,6 @@ export default function App() {
   );
 }
 
-function LoadingStep({ delay, label }) {
-  const [visible, setVisible] = useState(false);
-
-  useState(() => {
-    const t = setTimeout(() => setVisible(true), delay);
-    return () => clearTimeout(t);
-  }, [delay]);
-
-  return (
-    <div className={`loading-step ${visible ? "visible" : ""}`}>
-      <span className="step-dot" />
-      <span>{label}</span>
-    </div>
-  );
+function ChatRow({ align, children }) {
+  return <div className={`chat-row ${align === "right" ? "align-right" : "align-left"}`}>{children}</div>;
 }

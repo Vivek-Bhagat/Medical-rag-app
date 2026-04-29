@@ -24,7 +24,7 @@ Doctor's Query
       │
       ▼
 ┌───────────────────────────────────────────────────┐
-│         FastAPI Backend  (your 16GB machine)       │
+│         FastAPI Backend  (your  machine)       │
 │                                                   │
 │  PubMed Ingester ──► BM25 + FAISS (CPU-only)     │
 │                           │                       │
@@ -35,33 +35,22 @@ Doctor's Query
 │                    └──────┬──────────────────-┘   │
 └───────────────────────────┼───────────────────────┘
                             │
-           ┌────────────────┴────────────────┐
-           │                                 │
-    ┌──────▼──────────────┐    ┌─────────────▼──────────┐
-    │  HuggingFace API    │    │       Groq API          │
-    │  OpenBioLLM-70B     │    │  llama3-70b-8192        │
-    │  (free tier)        │    │  (free, fast fallback)  │
-    └─────────────────────┘    └────────────────────────-┘
+                            |
+                            │
+    ┌         ┌─────────────▼──────────┐
+              │       Groq API          │
+              │  llama3-70b-8192        │
+              │  (free, fast fallback)  │
+              └────────────────────────-┘
 ```
 
 ---
 
 ## Free API Keys — Get Them First
 
-### 1. HuggingFace Token (Primary — OpenBioLLM-70B)
 
-```
-1. Sign up: https://huggingface.co/join
-2. Accept model licence: https://huggingface.co/aaditya/Llama3-OpenBioLLM-70B
-   (click "Agree and access repository")
-3. Create token: https://huggingface.co/settings/tokens
-   → New token → Role: Read → Copy it
-4. Paste into backend/.env as HF_TOKEN=hf_xxx...
-```
 
-Free tier limits: 1000 requests/day · unlimited on Serverless Inference
-
-### 2. Groq API Key (Fallback — ultra-fast)
+### 1. Groq API Key (Fallback — ultra-fast)
 
 ```
 1. Sign up: https://console.groq.com
@@ -94,7 +83,7 @@ pip install -r requirements.txt   # Lightweight — no torch/transformers
 
 cp .env.example .env
 # Edit .env:
-#   HF_TOKEN=hf_your_token_here
+#   
 #   GROQ_API_KEY=gsk_your_key_here
 #   ENTREZ_EMAIL=your@email.com
 #   LLM_BACKEND=groq              ← fastest option
@@ -132,13 +121,11 @@ Open: **http://localhost:3000**
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HF_TOKEN` | _(required)_ | HuggingFace access token |
-| `HF_MODEL` | `aaditya/Llama3-OpenBioLLM-70B` | HF model ID |
-| `HF_TIMEOUT` | `120` | Seconds before HF request timeout |
+
 | `GROQ_API_KEY` | _(recommended)_ | Groq API key |
 | `GROQ_MODEL` | `llama3-70b-8192` | Groq model name |
 | `GROQ_TIMEOUT` | `60` | Seconds before Groq timeout |
-| `LLM_BACKEND` | `huggingface` | Primary: `huggingface` or `groq` |
+| `LLM_BACKEND` |  Primary:  `groq` |
 | `LLM_MAX_RETRIES` | `3` | Retries per API call |
 | `ENTREZ_EMAIL` | _(required)_ | Email for PubMed API |
 | `EMBED_MODEL` | `pritamdeka/S-PubMedBert-MS-MARCO` | Local embedding model |
@@ -151,7 +138,7 @@ Open: **http://localhost:3000**
 
 | | HuggingFace Inference API | Groq API |
 |-|--------------------------|----------|
-| Model | OpenBioLLM-70B (biomedical fine-tune) | Llama-3-70B (general) |
+| Model  | Llama-3-70B (general) |
 | Speed | 10–60s | 1–3s |
 | Free tier | 1000 req/day | 500 req/day |
 | Latency | High (cold start) | Very low |
@@ -213,9 +200,8 @@ Returns `"No answer found"` when:
 
 | Problem | Fix |
 |---------|-----|
-| `HF 503` on startup | Model is loading on HF servers — wait ~30s and retry |
-| `HF 429` | Rate limit hit — system auto-waits and retries |
+
 | `Groq 429` | Rate limit — set `LLM_BACKEND=huggingface` temporarily |
 | Slow responses | Switch `LLM_BACKEND=groq` (1-3s vs 10-60s) |
 | `No answer found` always | Run `seed_index.py` first; check index size at `/status` |
-| HF model gated | Accept licence at huggingface.co/aaditya/Llama3-OpenBioLLM-70B |
+

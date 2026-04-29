@@ -1,8 +1,8 @@
 import { useState } from "react";
 
-export default function SourceList({ sources }) {
+export default function SourceList({ sources, variant = "panel" }) {
   return (
-    <div className="source-list">
+    <div className={`source-list ${variant === "chat" ? "source-list--chat" : ""}`}>
       <h3 className="sources-title">
         <span className="sources-icon">📚</span>
         Sources ({sources.length})
