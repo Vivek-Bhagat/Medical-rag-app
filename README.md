@@ -1,9 +1,5 @@
 # MedRAG — Evidence-Based Medical Intelligence
 
-Production-ready RAG system for doctors.  
-**LLM: [aaditya/Llama3-OpenBioLLM-70B](https://huggingface.co/aaditya/Llama3-OpenBioLLM-70B)** via HuggingFace Inference API.  
-The 70B model runs **entirely on remote servers** — your machine needs only 16 GB RAM and no GPU.
-
 ---
 
 ## Your Machine Requirements
@@ -39,7 +35,7 @@ Doctor's Query
                             │
     ┌         ┌─────────────▼──────────┐
               │       Groq API          │
-              │  llama3-70b-8192        │
+              │  llama-3.3-70b        │
               │  (free, fast fallback)  │
               └────────────────────────-┘
 ```
@@ -123,7 +119,7 @@ Open: **http://localhost:3000**
 |----------|---------|-------------|
 
 | `GROQ_API_KEY` | _(recommended)_ | Groq API key |
-| `GROQ_MODEL` | `llama3-70b-8192` | Groq model name |
+| `GROQ_MODEL` | `llama-3.3-70b ` | Groq model name |
 | `GROQ_TIMEOUT` | `60` | Seconds before Groq timeout |
 | `LLM_BACKEND` |  Primary:  `groq` |
 | `LLM_MAX_RETRIES` | `3` | Retries per API call |
@@ -196,12 +192,6 @@ Returns `"No answer found"` when:
 
 ---
 
-## Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
 
-| `Groq 429` | Rate limit — set `LLM_BACKEND=huggingface` temporarily |
-| Slow responses | Switch `LLM_BACKEND=groq` (1-3s vs 10-60s) |
-| `No answer found` always | Run `seed_index.py` first; check index size at `/status` |
 
